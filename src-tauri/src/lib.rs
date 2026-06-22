@@ -263,6 +263,20 @@ pub fn run() {
             config_path,
         })
         .setup(|app| {
+            #[cfg(desktop)]
+            {
+                use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
+
+                app.handle()
+                    .plugin(tauri_plugin_autostart::init(
+                        MacosLauncher::LaunchAgent,
+                        None,
+                    ))
+                    .map_err(|error| error.to_string())?;
+
+                let _ = app.autolaunch().enable();
+            }
+
             setup_tray(app)?;
             start_scheduler(app.handle().clone());
             if let Some(window) = app.get_webview_window("main") {
