@@ -10,6 +10,9 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build-windows:
     name: Build Windows app
@@ -59,10 +62,34 @@ jobs:
             src-tauri/target/release/bundle/**/*.exe
           if-no-files-found: error
 
+      - name: Move latest tag
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: bash
+        run: |
+          git tag -f latest
+          git push -f origin latest
+
+      - name: Publish latest main build
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: Latest main build
+          body: |
+            Automatic build from main.
+
+            Commit: ${{ github.sha }}
+          make_latest: true
+          overwrite_files: true
+          files: |
+            src-tauri/target/release/bundle/**/*.msi
+            src-tauri/target/release/bundle/**/*.exe
+
       - name: Publish GitHub release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
+          make_latest: true
           files: |
             src-tauri/target/release/bundle/**/*.msi
             src-tauri/target/release/bundle/**/*.exe

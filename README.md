@@ -54,8 +54,10 @@ src-tauri/target/release/bundle/
 
 The GitHub Pages landing page lives in `docs/`.
 
-Downloads are loaded from the latest GitHub Release. Push a tag like `v0.1.0`
-to build and publish release assets through GitHub Actions.
+Downloads are loaded from the latest GitHub Release.
+
+Every push to `main` builds Windows installers and updates the rolling
+`latest` release. Push a tag like `v0.1.0` to publish a versioned release.
 
 ## License
 
