@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/icon.png" alt="Mine AutoBackup icon" width="128" height="128" />
+</p>
+
 # Mine AutoBackup
 
 Windows tray app for backing up selected Minecraft worlds to Google Drive.
