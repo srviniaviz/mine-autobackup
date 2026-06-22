@@ -107,6 +107,12 @@ struct TokenResponse {
 }
 
 #[derive(Debug, Deserialize)]
+struct TokenErrorResponse {
+    error: Option<String>,
+    error_description: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
 struct DriveFileResponse {
     id: String,
 }
@@ -841,6 +847,7 @@ fn persist_secure_google_tokens(config: &AppConfig) -> Result<(), String> {
 
 fn perform_google_login(google: &mut GoogleConfig) -> Result<(), String> {
     let client_id = configured_google_client_id(google)?;
+    let client_secret = configured_google_client_secret();
     let listener = TcpListener::bind("127.0.0.1:0").map_err(|error| error.to_string())?;
     let port = listener
         .local_addr()
@@ -867,13 +874,16 @@ fn perform_google_login(google: &mut GoogleConfig) -> Result<(), String> {
     }
 
     let client = http_client()?;
-    let form = vec![
+    let mut form = vec![
         ("client_id", client_id.as_str()),
         ("code", code.as_str()),
         ("code_verifier", verifier.as_str()),
         ("grant_type", "authorization_code"),
         ("redirect_uri", redirect_uri.as_str()),
     ];
+    if let Some(secret) = client_secret.as_deref() {
+        form.push(("client_secret", secret));
+    }
     let token: TokenResponse = token_request(
         client
             .post("https://oauth2.googleapis.com/token")
@@ -1108,16 +1118,20 @@ fn ensure_access_token(google: &mut GoogleConfig) -> Result<String, String> {
         .or_else(|| option_env!("GOOGLE_OAUTH_CLIENT_ID").map(str::to_string))
         .or_else(|| std::env::var("GOOGLE_OAUTH_CLIENT_ID").ok())
         .ok_or_else(|| "O app ainda nao tem Google OAuth Client ID embutido.".to_string())?;
+    let client_secret = configured_google_client_secret();
     let refresh_token = google
         .refresh_token
         .clone()
         .ok_or_else(|| "Conecte sua conta Google primeiro".to_string())?;
     let client = http_client()?;
-    let form = vec![
+    let mut form = vec![
         ("client_id", client_id.as_str()),
         ("refresh_token", refresh_token.as_str()),
         ("grant_type", "refresh_token"),
     ];
+    if let Some(secret) = client_secret.as_deref() {
+        form.push(("client_secret", secret));
+    }
     let token: TokenResponse = token_request(
         client
             .post("https://oauth2.googleapis.com/token")
@@ -1274,6 +1288,13 @@ fn token_request(builder: reqwest::blocking::RequestBuilder) -> Result<TokenResp
     let status = response.status();
     let body = response.text().map_err(|error| error.to_string())?;
     if !status.is_success() {
+        if let Ok(error) = serde_json::from_str::<TokenErrorResponse>(&body) {
+            let code = error.error.unwrap_or_else(|| "erro_desconhecido".into());
+            if let Some(description) = error.error_description {
+                return Err(format!("Google token HTTP {status}: {code} - {description}"));
+            }
+            return Err(format!("Google token HTTP {status}: {code}"));
+        }
         return Err(format!("Google token HTTP {status}: {body}"));
     }
     serde_json::from_str(&body).map_err(|error| error.to_string())
@@ -1365,6 +1386,13 @@ fn configured_google_client_id(google: &GoogleConfig) -> Result<String, String> 
         .or_else(|| option_env!("GOOGLE_OAUTH_CLIENT_ID").map(str::to_string))
         .or_else(|| std::env::var("GOOGLE_OAUTH_CLIENT_ID").ok())
         .ok_or_else(|| "O app ainda nao tem Google OAuth Client ID embutido.".to_string())
+}
+
+fn configured_google_client_secret() -> Option<String> {
+    option_env!("GOOGLE_OAUTH_CLIENT_SECRET")
+        .map(str::to_string)
+        .or_else(|| std::env::var("GOOGLE_OAUTH_CLIENT_SECRET").ok())
+        .filter(|secret| !secret.trim().is_empty())
 }
 
 fn default_minecraft_dir() -> Option<PathBuf> {

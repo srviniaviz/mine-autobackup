@@ -26,11 +26,15 @@ Create a `.env` file from the example:
 Copy-Item .env.example .env
 ```
 
-Fill in your Google OAuth Desktop app Client ID:
+Fill in your Google OAuth Desktop app credentials:
 
 ```env
 GOOGLE_OAUTH_CLIENT_ID=your-client-id
+GOOGLE_OAUTH_CLIENT_SECRET=your-client-secret
 ```
+
+For Desktop app OAuth, Google may require the client secret during token
+exchange. Do not commit your real `.env` file.
 
 The Google Cloud project must have the Google Drive API enabled.
 
@@ -60,7 +64,7 @@ The GitHub Pages landing page lives in `docs/`.
 Downloads are loaded from GitHub Releases.
 
 Every push to `main` builds Windows installers and publishes a release using
-the app version from `package.json`, like `v0.1.0`. Run `npm run version:app -- 0.1.1`
+the app version from `package.json`, like `v0.1.0`. Run `npm run version:app -- 0.1.3`
 before pushing when you want a new history entry.
 
 ## License
