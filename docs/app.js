@@ -54,44 +54,94 @@
     return assets.reduce((total, asset) => total + (asset.download_count || 0), 0);
   }
 
+  function versionedReleases(releases) {
+    return releases.filter((release) => /^v?\d+\.\d+\.\d+/i.test(release.tag_name || ""));
+  }
+
+  function safeUrl(value, fallback) {
+    try {
+      const url = new URL(value);
+      return url.protocol === "https:" ? url.href : fallback;
+    } catch {
+      return fallback;
+    }
+  }
+
+  function appendVersionHeader() {
+    const header = document.createElement("div");
+    header.className = "version-row version-row--head";
+    ["Versão", "Data", "Total", "Arquivos"].forEach((label) => {
+      const item = document.createElement("span");
+      item.textContent = label;
+      header.appendChild(item);
+    });
+    versionTable.appendChild(header);
+  }
+
+  function appendEmptyVersion(message) {
+    const empty = document.createElement("div");
+    empty.className = "version-empty";
+    empty.textContent = message;
+    versionTable.appendChild(empty);
+  }
+
+  function createDownloadChip(asset, fallbackUrl) {
+    const link = document.createElement("a");
+    link.className = asset.name.toLowerCase().endsWith(".exe")
+      ? "download-chip download-chip--primary"
+      : "download-chip";
+    link.href = safeUrl(asset.browser_download_url, fallbackUrl);
+    link.textContent = assetKind(asset);
+    return link;
+  }
+
   function renderVersionHistory(releases) {
-    const rows = releases
-      .map((release, index) => {
-        const assets = windowsAssets(release);
-        const downloads = assets.length
-          ? assets
-              .map((asset) => {
-                const primaryClass = asset.name.toLowerCase().endsWith(".exe")
-                  ? " download-chip--primary"
-                  : "";
-                return `<a class="download-chip${primaryClass}" href="${asset.browser_download_url}">${assetKind(asset)}</a>`;
-              })
-              .join("")
-          : `<a class="download-chip" href="${release.html_url}">Ver release</a>`;
+    versionTable.replaceChildren();
+    appendVersionHeader();
 
-        return `
-          <div class="version-row">
-            <span class="version-name">
-              ${release.tag_name}
-              ${index === 0 ? '<span class="version-current">Atual</span>' : ""}
-            </span>
-            <span class="version-date">${releaseDate(release.published_at || release.created_at)}</span>
-            <span class="version-download-count">${totalDownloads(assets).toLocaleString("pt-BR")}</span>
-            <span class="download-links">${downloads}</span>
-          </div>
-        `;
-      })
-      .join("");
+    if (!releases.length) {
+      appendEmptyVersion("Nenhuma versão publicada ainda.");
+      return;
+    }
 
-    versionTable.innerHTML = `
-      <div class="version-row version-row--head">
-        <span>Versão</span>
-        <span>Data</span>
-        <span>Total</span>
-        <span>Arquivos</span>
-      </div>
-      ${rows || '<div class="version-empty">Nenhuma versão publicada ainda.</div>'}
-    `;
+    releases.forEach((release, index) => {
+      const assets = windowsAssets(release);
+      const row = document.createElement("div");
+      row.className = "version-row";
+
+      const versionName = document.createElement("span");
+      versionName.className = "version-name";
+      versionName.append(document.createTextNode(release.tag_name || "Sem versão"));
+      if (index === 0) {
+        const current = document.createElement("span");
+        current.className = "version-current";
+        current.textContent = "Atual";
+        versionName.appendChild(current);
+      }
+
+      const date = document.createElement("span");
+      date.className = "version-date";
+      date.textContent = releaseDate(release.published_at || release.created_at);
+
+      const count = document.createElement("span");
+      count.className = "version-download-count";
+      count.textContent = totalDownloads(assets).toLocaleString("pt-BR");
+
+      const links = document.createElement("span");
+      links.className = "download-links";
+      if (assets.length) {
+        assets.forEach((asset) => links.appendChild(createDownloadChip(asset, releasesUrl)));
+      } else {
+        const link = document.createElement("a");
+        link.className = "download-chip";
+        link.href = safeUrl(release.html_url, releasesUrl);
+        link.textContent = "Ver release";
+        links.appendChild(link);
+      }
+
+      row.append(versionName, date, count, links);
+      versionTable.appendChild(row);
+    });
   }
 
   try {
@@ -103,7 +153,7 @@
       throw new Error("releases not found");
     }
 
-    const releases = await response.json();
+    const releases = versionedReleases(await response.json());
     const release = releases[0];
     if (!release) {
       throw new Error("no releases");
@@ -122,11 +172,11 @@
     }
 
     primary.textContent = `Baixar ${assetKind(setup)}`;
-    primary.href = setup.browser_download_url;
+    primary.href = safeUrl(setup.browser_download_url, releasesUrl);
 
     if (msi && msi.browser_download_url !== setup.browser_download_url) {
       secondary.textContent = `Baixar ${assetKind(msi)}`;
-      secondary.href = msi.browser_download_url;
+      secondary.href = safeUrl(msi.browser_download_url, releasesUrl);
     } else {
       secondary.textContent = "Ver releases";
       secondary.href = releasesUrl;
@@ -139,14 +189,8 @@
     secondary.textContent = "Ver builds";
     secondary.href = `https://github.com/${repo}/actions/workflows/build.yml`;
     status.textContent = "Nenhuma release com instalador foi encontrada ainda.";
-    versionTable.innerHTML = `
-      <div class="version-row version-row--head">
-        <span>Versão</span>
-        <span>Data</span>
-        <span>Total</span>
-        <span>Arquivos</span>
-      </div>
-      <div class="version-empty">Nenhuma release com instalador foi encontrada ainda.</div>
-    `;
+    versionTable.replaceChildren();
+    appendVersionHeader();
+    appendEmptyVersion("Nenhuma release com instalador foi encontrada ainda.");
   }
 })();

@@ -6,7 +6,7 @@ use sha2::{Digest, Sha256};
 use std::{
     collections::HashSet,
     fs::{self, File},
-    io::{Read, Seek, SeekFrom, Write},
+    io::{copy, Read, Seek, SeekFrom, Write},
     net::TcpListener,
     path::{Path, PathBuf},
     sync::{mpsc, Mutex},
@@ -20,6 +20,9 @@ use tauri::{
 };
 use tauri_plugin_positioner::{Position, WindowExt};
 use zip::{write::SimpleFileOptions, CompressionMethod, ZipWriter};
+
+const KEYRING_SERVICE: &str = "Mine AutoBackup";
+const GOOGLE_REFRESH_TOKEN_ACCOUNT: &str = "google-refresh-token";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct AppConfig {
@@ -204,13 +207,23 @@ fn google_login(app: tauri::AppHandle) -> Result<(), String> {
             match result {
                 Ok(()) => {
                     inner.config.google = config;
-                    inner.config.last_result = Some("Google Drive conectado".into());
+                    match save_config(&state.config_path, &inner.config) {
+                        Ok(()) => {
+                            inner.config.last_result = Some("Google Drive conectado".into());
+                        }
+                        Err(error) => {
+                            inner.config.google = GoogleConfig::default();
+                            inner.config.last_result =
+                                Some(format!("Falha ao salvar login Google: {error}"));
+                            let _ = save_config(&state.config_path, &inner.config);
+                        }
+                    }
                 }
                 Err(error) => {
                     inner.config.last_result = Some(format!("Falha no login Google: {error}"));
+                    let _ = save_config(&state.config_path, &inner.config);
                 }
             }
-            let _ = save_config(&state.config_path, &inner.config);
         }
 
         if let Some(window) = app.get_webview_window("main") {
@@ -248,7 +261,13 @@ async fn run_backup_now(app: tauri::AppHandle) -> Result<String, String> {
 
 pub fn run() {
     let config_path = config_path();
-    let config = load_config(&config_path).unwrap_or_default();
+    let mut config = load_config(&config_path).unwrap_or_default();
+    let had_disk_google_tokens =
+        config.google.refresh_token.is_some() || config.google.access_token.is_some();
+    load_secure_google_tokens(&mut config);
+    if had_disk_google_tokens {
+        let _ = save_config(&config_path, &config);
+    }
 
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -518,26 +537,27 @@ fn zip_directory<W: Write + Seek>(
     for entry in fs::read_dir(current).map_err(|error| error.to_string())? {
         let entry = entry.map_err(|error| error.to_string())?;
         let path = entry.path();
+        let metadata = fs::symlink_metadata(&path).map_err(|error| error.to_string())?;
+        if is_symlink_or_reparse_point(&metadata) {
+            continue;
+        }
         let relative = path
             .strip_prefix(root)
             .map_err(|error| error.to_string())?
             .to_string_lossy()
             .replace('\\', "/");
 
-        if path.is_dir() {
+        if metadata.is_dir() {
             if !relative.is_empty() {
                 zip.add_directory(format!("{relative}/"), options)
                     .map_err(|error| error.to_string())?;
             }
             zip_directory(state, root, &path, zip, options, total_files, written_files)?;
-        } else {
+        } else if metadata.is_file() {
             zip.start_file(&relative, options)
                 .map_err(|error| error.to_string())?;
             let mut file = File::open(&path).map_err(|error| error.to_string())?;
-            let mut buffer = Vec::new();
-            file.read_to_end(&mut buffer)
-                .map_err(|error| error.to_string())?;
-            zip.write_all(&buffer).map_err(|error| error.to_string())?;
+            copy(&mut file, zip).map_err(|error| error.to_string())?;
             *written_files += 1;
             set_progress(
                 state,
@@ -555,43 +575,57 @@ fn zip_directory<W: Write + Seek>(
 }
 
 fn count_world_files(path: &Path) -> Result<u64, String> {
-    if path.is_file() {
+    let metadata = fs::symlink_metadata(path).map_err(|error| error.to_string())?;
+    if is_symlink_or_reparse_point(&metadata) {
+        return Ok(0);
+    }
+
+    if metadata.is_file() {
         return Ok(1);
     }
 
     let mut count = 0;
     for entry in fs::read_dir(path).map_err(|error| error.to_string())? {
         let path = entry.map_err(|error| error.to_string())?.path();
-        if path.is_dir() {
-            count += count_world_files(&path)?;
-        } else {
-            count += 1;
-        }
+        count += count_world_files(&path)?;
     }
     Ok(count)
 }
 
 fn directory_size(path: &Path) -> Result<u64, String> {
-    if path.is_file() {
-        return path
-            .metadata()
-            .map(|metadata| metadata.len())
-            .map_err(|error| error.to_string());
+    let metadata = fs::symlink_metadata(path).map_err(|error| error.to_string())?;
+    if is_symlink_or_reparse_point(&metadata) {
+        return Ok(0);
+    }
+
+    if metadata.is_file() {
+        return Ok(metadata.len());
     }
 
     let mut size = 0;
     for entry in fs::read_dir(path).map_err(|error| error.to_string())? {
         let path = entry.map_err(|error| error.to_string())?.path();
-        if path.is_dir() {
-            size += directory_size(&path)?;
-        } else {
-            size += path
-                .metadata()
-                .map(|metadata| metadata.len())
-                .map_err(|error| error.to_string())?;
-        }
+        size += directory_size(&path)?;
     }
     Ok(size)
+}
+
+fn is_symlink_or_reparse_point(metadata: &fs::Metadata) -> bool {
+    if metadata.file_type().is_symlink() {
+        return true;
+    }
+
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
+        return metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0;
+    }
+
+    #[cfg(not(windows))]
+    {
+        false
+    }
 }
 
 fn progress_label(relative: &str) -> String {
@@ -717,15 +751,18 @@ fn list_worlds_from_dir(saves_dir: &Path) -> Result<Vec<MinecraftWorld>, String>
     for entry in fs::read_dir(saves_dir).map_err(|error| error.to_string())? {
         let entry = entry.map_err(|error| error.to_string())?;
         let path = entry.path();
-        if !path.is_dir() || !path.join("level.dat").is_file() {
+        let metadata = fs::symlink_metadata(&path).map_err(|error| error.to_string())?;
+        if is_symlink_or_reparse_point(&metadata)
+            || !metadata.is_dir()
+            || !path.join("level.dat").is_file()
+        {
             continue;
         }
 
         let id = entry.file_name().to_string_lossy().to_string();
-        let modified_at = entry
-            .metadata()
+        let modified_at = metadata
+            .modified()
             .ok()
-            .and_then(|metadata| metadata.modified().ok())
             .map(DateTime::<Local>::from)
             .map(|value| value.to_rfc3339());
 
@@ -754,16 +791,56 @@ fn load_config(path: &Path) -> Option<AppConfig> {
 }
 
 fn save_config(path: &Path, config: &AppConfig) -> Result<(), String> {
+    let persist_result = persist_secure_google_tokens(config);
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|error| error.to_string())?;
     }
-    let content = serde_json::to_string_pretty(config).map_err(|error| error.to_string())?;
-    fs::write(path, content).map_err(|error| error.to_string())
+    let mut disk_config = config.clone();
+    disk_config.google.refresh_token = None;
+    disk_config.google.access_token = None;
+    disk_config.google.expires_at = None;
+    let content = serde_json::to_string_pretty(&disk_config).map_err(|error| error.to_string())?;
+    fs::write(path, content).map_err(|error| error.to_string())?;
+    persist_result
+}
+
+fn load_secure_google_tokens(config: &mut AppConfig) {
+    config.google.access_token = None;
+    config.google.expires_at = None;
+
+    if config.google.refresh_token.is_some() {
+        return;
+    }
+
+    let Ok(entry) = keyring::Entry::new(KEYRING_SERVICE, GOOGLE_REFRESH_TOKEN_ACCOUNT) else {
+        return;
+    };
+    let Ok(token) = entry.get_password() else {
+        return;
+    };
+    if !token.trim().is_empty() {
+        config.google.refresh_token = Some(token);
+    }
+}
+
+fn persist_secure_google_tokens(config: &AppConfig) -> Result<(), String> {
+    if let Some(token) = config.google.refresh_token.as_deref() {
+        let entry = keyring::Entry::new(KEYRING_SERVICE, GOOGLE_REFRESH_TOKEN_ACCOUNT)
+            .map_err(|error| format!("Falha ao abrir cofre do Windows: {error}"))?;
+        entry
+            .set_password(token)
+            .map_err(|error| format!("Falha ao salvar token Google no cofre do Windows: {error}"))?;
+    } else {
+        if let Ok(entry) = keyring::Entry::new(KEYRING_SERVICE, GOOGLE_REFRESH_TOKEN_ACCOUNT) {
+            let _ = entry.delete_credential();
+        }
+    }
+
+    Ok(())
 }
 
 fn perform_google_login(google: &mut GoogleConfig) -> Result<(), String> {
     let client_id = configured_google_client_id(google)?;
-    let client_secret = configured_google_client_secret();
     let listener = TcpListener::bind("127.0.0.1:0").map_err(|error| error.to_string())?;
     let port = listener
         .local_addr()
@@ -790,16 +867,13 @@ fn perform_google_login(google: &mut GoogleConfig) -> Result<(), String> {
     }
 
     let client = http_client()?;
-    let mut form = vec![
+    let form = vec![
         ("client_id", client_id.as_str()),
         ("code", code.as_str()),
         ("code_verifier", verifier.as_str()),
         ("grant_type", "authorization_code"),
         ("redirect_uri", redirect_uri.as_str()),
     ];
-    if let Some(secret) = client_secret.as_deref() {
-        form.push(("client_secret", secret));
-    }
     let token: TokenResponse = token_request(
         client
             .post("https://oauth2.googleapis.com/token")
@@ -1034,20 +1108,16 @@ fn ensure_access_token(google: &mut GoogleConfig) -> Result<String, String> {
         .or_else(|| option_env!("GOOGLE_OAUTH_CLIENT_ID").map(str::to_string))
         .or_else(|| std::env::var("GOOGLE_OAUTH_CLIENT_ID").ok())
         .ok_or_else(|| "O app ainda nao tem Google OAuth Client ID embutido.".to_string())?;
-    let client_secret = configured_google_client_secret();
     let refresh_token = google
         .refresh_token
         .clone()
         .ok_or_else(|| "Conecte sua conta Google primeiro".to_string())?;
     let client = http_client()?;
-    let mut form = vec![
+    let form = vec![
         ("client_id", client_id.as_str()),
         ("refresh_token", refresh_token.as_str()),
         ("grant_type", "refresh_token"),
     ];
-    if let Some(secret) = client_secret.as_deref() {
-        form.push(("client_secret", secret));
-    }
     let token: TokenResponse = token_request(
         client
             .post("https://oauth2.googleapis.com/token")
@@ -1295,13 +1365,6 @@ fn configured_google_client_id(google: &GoogleConfig) -> Result<String, String> 
         .or_else(|| option_env!("GOOGLE_OAUTH_CLIENT_ID").map(str::to_string))
         .or_else(|| std::env::var("GOOGLE_OAUTH_CLIENT_ID").ok())
         .ok_or_else(|| "O app ainda nao tem Google OAuth Client ID embutido.".to_string())
-}
-
-fn configured_google_client_secret() -> Option<String> {
-    option_env!("GOOGLE_OAUTH_CLIENT_SECRET")
-        .map(str::to_string)
-        .or_else(|| std::env::var("GOOGLE_OAUTH_CLIENT_SECRET").ok())
-        .filter(|secret| !secret.trim().is_empty())
 }
 
 fn default_minecraft_dir() -> Option<PathBuf> {
