@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Mine AutoBackup faz backup dos seus mundos de Minecraft no Google Drive."
+    />
+    <title>Mine AutoBackup</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="page">
+      <section class="hero">
+        <div class="hero__content">
+          <div class="badge">Mine AutoBackup</div>
+          <h1>Backup dos seus mundos no Google Drive.</h1>
+          <p>
+            Um app de bandeja para Windows que lista seus saves do Minecraft,
+            deixa você escolher os mundos e envia backups compactados para o
+            seu Drive.
+          </p>
+
+          <div class="actions" id="downloads">
+            <a class="button button--primary" id="downloadPrimary" href="#downloads">
+              Buscando download...
+            </a>
+            <a class="button" id="downloadSecondary" href="#downloads">Ver releases</a>
+          </div>
+
+          <p class="hint" id="releaseStatus">
+            A página usa a última release publicada no GitHub.
+          </p>
+        </div>
+
+        <div class="block-card" aria-hidden="true">
+          <div class="sky"></div>
+          <div class="grass"></div>
+          <div class="dirt">
+            <span></span><span></span><span></span><span></span>
+          </div>
+          <div class="pickaxe">⌁</div>
+        </div>
+      </section>
+
+      <section class="features">
+        <article>
+          <strong>Escolha os saves</strong>
+          <span>O backup não copia tudo às cegas. Você marca os mundos.</span>
+        </article>
+        <article>
+          <strong>Google Drive</strong>
+          <span>O app cria uma pasta Mine AutoBackup no Drive conectado.</span>
+        </article>
+        <article>
+          <strong>Automático</strong>
+          <span>Configure periodicidade e deixe o app rodando na bandeja.</span>
+        </article>
+      </section>
+    </main>
+
+    <script src="./app.js"></script>
+  </body>
+</html>

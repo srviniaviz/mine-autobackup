@@ -1,0 +1,279 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 360px;
+  min-height: 560px;
+  background: #111111;
+  user-select: none;
+}
+
+button {
+  -webkit-app-region: no-drag;
+}
+
+.minecraft-shell {
+  background:
+    linear-gradient(180deg, rgba(74, 128, 174, 0.9) 0 86px, transparent 86px),
+    linear-gradient(180deg, #222222 0%, #171717 42%, #101010 100%);
+}
+
+.minecraft-shell::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0.16;
+  pointer-events: none;
+  background-image:
+    linear-gradient(90deg, #ffffff 1px, transparent 1px),
+    linear-gradient(#ffffff 1px, transparent 1px);
+  background-size: 16px 16px;
+}
+
+.sky-band {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 92px;
+  background:
+    linear-gradient(90deg, transparent 0 44px, rgba(255, 255, 255, 0.28) 44px 92px, transparent 92px 100%),
+    linear-gradient(180deg, #5aa5d8 0%, #3172ad 100%);
+  border-bottom: 4px solid #1e4d27;
+}
+
+.terrain-strip {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 86px;
+  height: 42px;
+  background:
+    linear-gradient(90deg, #5a8d34 0 16px, #6ca43e 16px 32px, #4d7c2d 32px 48px, #75ae44 48px 64px),
+    linear-gradient(180deg, #6fab41 0 15px, #7a4c2b 15px 100%);
+  background-size: 64px 42px;
+  border-top: 2px solid #91d85a;
+  border-bottom: 4px solid #2a1b12;
+}
+
+.ore-glow {
+  position: absolute;
+  right: -42px;
+  bottom: 72px;
+  width: 150px;
+  height: 150px;
+  background: #2c5f9f;
+  opacity: 0.16;
+  filter: blur(24px);
+}
+
+.minecraft-badge {
+  display: grid;
+  height: 42px;
+  width: 42px;
+  place-items: center;
+  border: 3px solid #111111;
+  background:
+    linear-gradient(180deg, #7fbd50 0 46%, #5d8f39 46% 100%);
+  color: #ffffff;
+  box-shadow: inset 0 3px 0 rgba(255, 255, 255, 0.22), inset 0 -4px 0 rgba(0, 0, 0, 0.24), 4px 4px 0 #000000;
+}
+
+.minecraft-title {
+  color: #ffffff;
+  font-size: 23px;
+  font-weight: 950;
+  line-height: 1;
+  letter-spacing: 0;
+  text-shadow: 3px 3px 0 #111111;
+}
+
+.minecraft-kicker {
+  margin-top: 5px;
+  color: #d8ffc2;
+  font-size: 10px;
+  font-weight: 950;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  text-shadow: 2px 2px 0 #1b451f;
+}
+
+.shadow-pixel {
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.1), inset 0 -4px 0 rgba(0, 0, 0, 0.32), 4px 4px 0 #000000;
+}
+
+.icon-button {
+  @apply grid h-8 w-8 place-items-center border-2 border-black bg-[#2d2d2d] text-[#d8d8d8] transition hover:bg-[#3b3b3b] hover:text-white;
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.12), inset 0 -3px 0 rgba(0, 0, 0, 0.34), 3px 3px 0 #000000;
+}
+
+.stone-button {
+  @apply flex h-11 items-center justify-center gap-2 border-2 border-black bg-[#686868] text-sm font-black uppercase tracking-wide text-white transition hover:bg-[#787878] active:translate-y-px;
+  background-image:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.12) 0 20%, transparent 20% 100%),
+    linear-gradient(180deg, #777777 0%, #4b4b4b 100%);
+  box-shadow: inset 0 3px 0 rgba(255, 255, 255, 0.16), inset 0 -4px 0 rgba(0, 0, 0, 0.32), 4px 4px 0 #000000;
+}
+
+.grass-button {
+  @apply flex h-12 items-center justify-center gap-2 border-2 border-black text-sm font-black uppercase tracking-wide text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50;
+  background:
+    linear-gradient(180deg, #79c64b 0%, #54a036 48%, #367322 49%, #2f651e 100%);
+  box-shadow: inset 0 3px 0 rgba(255, 255, 255, 0.22), inset 0 -5px 0 rgba(0, 0, 0, 0.28), 5px 5px 0 #000000;
+  text-shadow: 2px 2px 0 #1f4d16;
+}
+
+.toggle-button {
+  @apply grid h-12 w-12 place-items-center border-2 border-black text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50;
+  background:
+    linear-gradient(180deg, #b98043 0%, #87562c 100%);
+  box-shadow: inset 0 3px 0 rgba(255, 255, 255, 0.18), inset 0 -5px 0 rgba(0, 0, 0, 0.3), 5px 5px 0 #000000;
+}
+
+.mini-button {
+  @apply h-8 border-2 border-black bg-[#1d1d1d] text-xs font-black text-[#cfcfcf] transition hover:bg-[#303030] hover:text-white;
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.08), inset 0 -3px 0 rgba(0, 0, 0, 0.38), 3px 3px 0 #000000;
+}
+
+.mini-button-active {
+  @apply bg-[#3d7c2a] text-white;
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.16), inset 0 -3px 0 rgba(0, 0, 0, 0.3), 3px 3px 0 #000000;
+}
+
+.minecraft-input {
+  @apply h-10 w-full border-2 border-black bg-[#111111] px-3 text-xs font-black text-white outline-none placeholder:text-[#686868] focus:bg-[#181818];
+  box-shadow: inset 0 3px 0 rgba(255, 255, 255, 0.06), inset 0 -4px 0 rgba(0, 0, 0, 0.4), 4px 4px 0 #000000;
+}
+
+.tiny-button {
+  @apply h-7 border-2 border-black bg-[#1d1d1d] px-2 text-[10px] font-black uppercase tracking-wide text-[#d7d7d7] transition hover:bg-[#303030] disabled:cursor-not-allowed disabled:opacity-45;
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.08), inset 0 -3px 0 rgba(0, 0, 0, 0.38), 3px 3px 0 #000000;
+}
+
+.info-block {
+  @apply border-2 border-black bg-[#1f1f1f] p-3;
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.08), inset 0 -4px 0 rgba(0, 0, 0, 0.28), 4px 4px 0 #000000;
+}
+
+.info-block span,
+.stat-block span {
+  @apply block text-[10px] font-black uppercase tracking-[0.18em] text-[#8e8e8e];
+}
+
+.info-block strong {
+  @apply mt-1 block truncate text-sm font-black text-white;
+}
+
+.stat-block {
+  @apply border-2 border-black bg-[#262626] p-3 text-[#9f9f9f];
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.08), inset 0 -4px 0 rgba(0, 0, 0, 0.32), 4px 4px 0 #000000;
+}
+
+.stat-block strong {
+  @apply mt-1 block text-sm font-black text-white;
+}
+
+.status-board {
+  border: 2px solid #000000;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.06) 0 12px, transparent 12px 24px),
+    linear-gradient(180deg, #352313 0%, #24170d 100%);
+  box-shadow: inset 0 3px 0 rgba(255, 255, 255, 0.1), inset 0 -5px 0 rgba(0, 0, 0, 0.34), 5px 5px 0 #000000;
+}
+
+.progress-panel {
+  border: 2px solid #000000;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0 18%, transparent 18% 100%),
+    linear-gradient(180deg, #2b2b2b 0%, #191919 100%);
+  padding: 10px;
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.08), inset 0 -4px 0 rgba(0, 0, 0, 0.34), 5px 5px 0 #000000;
+}
+
+.progress-track {
+  height: 16px;
+  border: 2px solid #000000;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.06) 0 12px, transparent 12px 24px),
+    #111111;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  min-width: 4px;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.12) 0 12px, transparent 12px 24px),
+    linear-gradient(180deg, #79c64b 0%, #54a036 48%, #367322 49%, #2f651e 100%);
+  transition: width 180ms linear;
+}
+
+.world-panel {
+  border: 2px solid #000000;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0 18%, transparent 18% 100%),
+    linear-gradient(180deg, #282828 0%, #1b1b1b 100%);
+  padding: 12px;
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.08), inset 0 -5px 0 rgba(0, 0, 0, 0.32), 5px 5px 0 #000000;
+}
+
+.world-list {
+  display: grid;
+  max-height: 154px;
+  gap: 7px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.world-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.world-list::-webkit-scrollbar-track {
+  background: #101010;
+  border: 1px solid #000000;
+}
+
+.world-list::-webkit-scrollbar-thumb {
+  background: #5d8f39;
+  border: 1px solid #000000;
+}
+
+.world-row {
+  @apply flex min-h-10 min-w-0 items-center gap-2 border-2 border-black bg-[#111111] px-2 py-1 text-sm font-black text-[#d7d7d7] transition hover:bg-[#202020];
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.06), inset 0 -3px 0 rgba(0, 0, 0, 0.36);
+}
+
+.world-row small {
+  @apply shrink-0 text-right text-[10px] font-black uppercase leading-3 tracking-wide text-[#858585];
+}
+
+.world-meta {
+  display: grid;
+  justify-items: end;
+  min-width: 54px;
+}
+
+.world-row-selected {
+  @apply bg-[#244f1a] text-white hover:bg-[#2f651e];
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.12), inset 0 -3px 0 rgba(0, 0, 0, 0.32);
+}
+
+.world-row-selected small {
+  @apply text-[#bdf1a2];
+}
+
+.empty-worlds {
+  @apply border-2 border-dashed border-[#4a4a4a] bg-[#111111] p-3 text-xs font-bold leading-4 text-[#a8a8a8];
+}
