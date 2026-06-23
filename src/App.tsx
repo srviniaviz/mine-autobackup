@@ -19,6 +19,9 @@ import {
   X
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import packageJson from "../package.json";
+
+const APP_VERSION = packageJson.version;
 
 type BackupStatus = {
   minecraft_dir: string | null;
@@ -545,7 +548,7 @@ function App() {
             <ShieldCheck size={13} />
             {status.auto_enabled ? `Auto ${formatInterval(status.interval_minutes)}` : "Auto pausado"}
           </span>
-          <span>v0.1.0</span>
+          <span>v{APP_VERSION}</span>
         </footer>
       </section>
     </main>

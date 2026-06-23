@@ -23,6 +23,7 @@ use zip::{write::SimpleFileOptions, CompressionMethod, ZipWriter};
 
 const KEYRING_SERVICE: &str = "Mine AutoBackup";
 const GOOGLE_REFRESH_TOKEN_ACCOUNT: &str = "google-refresh-token";
+const GOOGLE_REFRESH_TOKEN_ENTROPY: &[u8] = b"mine-autobackup-google-refresh-token-v1";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct AppConfig {
@@ -276,6 +277,11 @@ pub fn run() {
     }
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(window) = app.get_webview_window("main") {
+                show_panel(&window);
+            }
+        }))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_positioner::init())
         .manage(AppState {
@@ -791,6 +797,13 @@ fn config_path() -> PathBuf {
         .join("config.json")
 }
 
+fn encrypted_google_token_path() -> PathBuf {
+    config_path()
+        .parent()
+        .map(|path| path.join("google-refresh-token.dpapi"))
+        .unwrap_or_else(|| PathBuf::from("Mine AutoBackup").join("google-refresh-token.dpapi"))
+}
+
 fn load_config(path: &Path) -> Option<AppConfig> {
     let content = fs::read_to_string(path).ok()?;
     serde_json::from_str(&content).ok()
@@ -815,34 +828,101 @@ fn load_secure_google_tokens(config: &mut AppConfig) {
     config.google.expires_at = None;
 
     if config.google.refresh_token.is_some() {
+        let _ = persist_secure_google_tokens(config);
         return;
     }
 
-    let Ok(entry) = keyring::Entry::new(KEYRING_SERVICE, GOOGLE_REFRESH_TOKEN_ACCOUNT) else {
-        return;
-    };
-    let Ok(token) = entry.get_password() else {
-        return;
-    };
-    if !token.trim().is_empty() {
+    if let Some(token) = load_refresh_token_from_keyring() {
         config.google.refresh_token = Some(token);
+        let _ = persist_refresh_token_to_dpapi(config.google.refresh_token.as_deref().unwrap_or(""));
+        return;
+    }
+
+    if let Some(token) = load_refresh_token_from_dpapi() {
+        config.google.refresh_token = Some(token);
+        let _ = persist_refresh_token_to_keyring(config.google.refresh_token.as_deref().unwrap_or(""));
     }
 }
 
 fn persist_secure_google_tokens(config: &AppConfig) -> Result<(), String> {
     if let Some(token) = config.google.refresh_token.as_deref() {
-        let entry = keyring::Entry::new(KEYRING_SERVICE, GOOGLE_REFRESH_TOKEN_ACCOUNT)
-            .map_err(|error| format!("Falha ao abrir cofre do Windows: {error}"))?;
-        entry
-            .set_password(token)
-            .map_err(|error| format!("Falha ao salvar token Google no cofre do Windows: {error}"))?;
-    } else {
-        if let Ok(entry) = keyring::Entry::new(KEYRING_SERVICE, GOOGLE_REFRESH_TOKEN_ACCOUNT) {
-            let _ = entry.delete_credential();
+        let keyring_result = persist_refresh_token_to_keyring(token);
+        let dpapi_result = persist_refresh_token_to_dpapi(token);
+
+        if dpapi_result.is_ok() || keyring_result.is_ok() {
+            return Ok(());
         }
+
+        let keyring_error = keyring_result
+            .err()
+            .unwrap_or_else(|| "cofre indisponivel".to_string());
+        let dpapi_error = dpapi_result
+            .err()
+            .unwrap_or_else(|| "DPAPI indisponivel".to_string());
+        return Err(format!(
+            "Falha ao salvar login Google. Keyring: {keyring_error}. DPAPI: {dpapi_error}"
+        ));
+    } else {
+        clear_secure_google_tokens();
     }
 
     Ok(())
+}
+
+fn load_refresh_token_from_keyring() -> Option<String> {
+    let entry = keyring::Entry::new(KEYRING_SERVICE, GOOGLE_REFRESH_TOKEN_ACCOUNT).ok()?;
+    let token = entry.get_password().ok()?;
+    (!token.trim().is_empty()).then_some(token)
+}
+
+fn persist_refresh_token_to_keyring(token: &str) -> Result<(), String> {
+    let entry = keyring::Entry::new(KEYRING_SERVICE, GOOGLE_REFRESH_TOKEN_ACCOUNT)
+        .map_err(|error| error.to_string())?;
+    entry.set_password(token).map_err(|error| error.to_string())
+}
+
+fn clear_secure_google_tokens() {
+    if let Ok(entry) = keyring::Entry::new(KEYRING_SERVICE, GOOGLE_REFRESH_TOKEN_ACCOUNT) {
+        let _ = entry.delete_credential();
+    }
+    let _ = fs::remove_file(encrypted_google_token_path());
+}
+
+#[cfg(windows)]
+fn load_refresh_token_from_dpapi() -> Option<String> {
+    use windows_dpapi::{decrypt_data, Scope};
+
+    let encrypted = fs::read(encrypted_google_token_path()).ok()?;
+    let decrypted = decrypt_data(&encrypted, Scope::User, Some(GOOGLE_REFRESH_TOKEN_ENTROPY)).ok()?;
+    let token = String::from_utf8(decrypted).ok()?;
+    (!token.trim().is_empty()).then_some(token)
+}
+
+#[cfg(not(windows))]
+fn load_refresh_token_from_dpapi() -> Option<String> {
+    None
+}
+
+#[cfg(windows)]
+fn persist_refresh_token_to_dpapi(token: &str) -> Result<(), String> {
+    use windows_dpapi::{encrypt_data, Scope};
+
+    let path = encrypted_google_token_path();
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+    }
+    let encrypted = encrypt_data(
+        token.as_bytes(),
+        Scope::User,
+        Some(GOOGLE_REFRESH_TOKEN_ENTROPY),
+    )
+    .map_err(|error| error.to_string())?;
+    fs::write(path, encrypted).map_err(|error| error.to_string())
+}
+
+#[cfg(not(windows))]
+fn persist_refresh_token_to_dpapi(_token: &str) -> Result<(), String> {
+    Err("DPAPI so esta disponivel no Windows".into())
 }
 
 fn perform_google_login(google: &mut GoogleConfig) -> Result<(), String> {
